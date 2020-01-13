@@ -10,17 +10,19 @@ export default class App extends Component {
   polygons = []
   numOfPoints = 50;
   g = [];
-
+  expectedProduct = null;
 
   createPolygon = p5 => {
     // get start point
     const v1 = p5.round(p5.random(0, this.numOfPoints-1))
-    const numOfEdges = p5.round(p5.random(4, 10))
+    const numOfEdges = p5.round(p5.random(4, 7))
     const svert = this.verticies[v1];
     const used = new Set();
     console.log('createPolygon', v1, numOfEdges);
-    const dfsRes = this.dfs(svert, 0, v1, used, numOfEdges);
 
+    this.expectedProduct = null;
+
+    const dfsRes = this.dfs(svert, 0, v1, used, numOfEdges);
     this.polygons.push({verticies: dfsRes})
     console.log('dfsRes', dfsRes);
   }
@@ -67,6 +69,32 @@ export default class App extends Component {
     }
   }
 
+  checkPolygon(polygon) {
+    // let's check only last ones
+    if (polygon.length > 2) {
+      const c = this.verticies[polygon[polygon.length - 1]]
+      const a = this.verticies[polygon[polygon.length - 2]]
+      const b = this.verticies[polygon[polygon.length - 3]]
+      
+      const ab = {
+        x: b.x - a.x, 
+        y: b.y - a.y,
+      }
+
+      const bc = {
+        x: c.x - a.x, 
+        y: c.y - a.y
+      }
+
+      const product =  (ab.x * bc.y - ab.y * bc.x) > 0;
+
+      if (this.expectedProduct === null) {
+        this.expectedProduct = product;
+      } 
+
+      return product === this.expectedProduct;
+    }
+  }
 
   setup = (p5, canvasParentRef) => {
     // use parent to render canvas in this ref (without that p5 render this canvas outside your component)
