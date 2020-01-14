@@ -6,112 +6,29 @@ import { isLinesIntersect, isPointsNear } from "./math";
 export default class App extends Component {
   size = 800;
   verticies = [];
-  edges = [];
-  polygons = []
+
+  mappixels = new Array(this.size).fill().map(i => new Array(this.size).fill(0));
+  nextpixels = new Array(this.size).fill().map(i => new Array(this.size).fill(0));
+
   numOfPoints = 50;
-  g = [];
-  expectedProduct = null;
 
-  createPolygon = p5 => {
-    // get start point
-    const v1 = p5.round(p5.random(0, this.numOfPoints-1))
-    const numOfEdges = p5.round(p5.random(4, 7))
-    const svert = this.verticies[v1];
-    const used = new Set();
-    console.log('createPolygon', v1, numOfEdges);
-
-    this.expectedProduct = null;
-
-    const dfsRes = this.dfs(svert, 0, v1, used, numOfEdges);
-    this.polygons.push({verticies: dfsRes})
-    console.log('dfsRes', dfsRes);
-  }
-
-  dfs = (v, l, svert, used, max_level) => {
-    if (l < max_level) {
-      for (const e of this.g[v.i]) {
-        if (e !== svert && !used.has(e)) {
-          used.add(v.i);
-          const dfsRes = this.dfs(this.verticies[e], l+1, svert, used, max_level);
-          used.delete(v.i);
-          if (dfsRes !== null) {
-            console.log('finished', dfsRes, l);
-            dfsRes.push(v.i);
-            console.log('adding next vert', dfsRes, l);
-            return dfsRes;
-          }
-
-          console.log('no match', l)
-        }
-      }
-      return null;
-    } else {
-      if (this.g[v.i].has(svert)) {
-        console.log('last edge found');
-        return [v.i]
-      } else {
-        return null;
-      }
-    }
-  }
-
-  createGraph = () => {
-    for (let i = 0; i < this.numOfPoints; i++) {
-      this.g[i] = new Set();
-    }
-
-    for (const edge of this.edges) {
-      const iv1 = edge.v1.i;
-      const iv2 = edge.v2.i;
-
-      this.g[iv1].add(iv2)
-      this.g[iv2].add(iv1)
-    }
-  }
-
-  checkPolygon(polygon) {
-    // let's check only last ones
-    if (polygon.length > 2) {
-      const c = this.verticies[polygon[polygon.length - 1]]
-      const a = this.verticies[polygon[polygon.length - 2]]
-      const b = this.verticies[polygon[polygon.length - 3]]
-      
-      const ab = {
-        x: b.x - a.x, 
-        y: b.y - a.y,
-      }
-
-      const bc = {
-        x: c.x - a.x, 
-        y: c.y - a.y
-      }
-
-      const product =  (ab.x * bc.y - ab.y * bc.x) > 0;
-
-      if (this.expectedProduct === null) {
-        this.expectedProduct = product;
-      } 
-
-      return product === this.expectedProduct;
-    }
-  }
+  colors = [];
 
   setup = (p5, canvasParentRef) => {
     // use parent to render canvas in this ref (without that p5 render this canvas outside your component)
     p5.createCanvas(this.size, this.size).parent(canvasParentRef);
+    p5.pixelDensity(1);
+
+    console.log(this.mappixels);
+
+    this.mappixels = new Array(this.size).fill().map(i => new Array(this.size).fill(0));
+    this.nextpixels = new Array(this.size).fill().map(i => new Array(this.size).fill(0));
 
     // first, let's generate dozen of points
     this.verticies = [];
-
-    this.verticies.push({ x: 1, y: 1, i: 0})
-    this.verticies.push({ x: this.size - 1, y: 1, i: 1 })
-    this.verticies.push({ x: 1, y: this.size - 1, i: 2})
-    this.verticies.push({ x: this.size - 1, y: this.size - 1, i: 3})
-
-    for (let i = 4; i < this.numOfPoints; i++) {
-      console.log(i);
+    for (let i = 0; i < this.numOfPoints; i++) {
       let x, y
-      
+
 
       // check if there are point near
       let near = true;
@@ -121,7 +38,7 @@ export default class App extends Component {
 
         let near2 = false;
         for (const v of this.verticies) {
-          if (isPointsNear(v, {x, y}, 10)) {
+          if (isPointsNear(v, { x, y }, 10)) {
             near2 = true;
             break;
           }
@@ -130,82 +47,139 @@ export default class App extends Component {
         near = near2;
       }
 
+      this.mappixels[x][y] = i;
+      console.log('set', x, y, this.mappixels[x][y], this.mappixels[x+1][y], i);
       this.verticies.push({ x, y, i })
+
+      this.colors.push([p5.round(p5.random(0, 254)), p5.round(p5.random(0, 254)), p5.round(p5.random(0, 254))])
     }
-    console.log(this.verticies)
 
-    this.edges = [];
+    // console.log(this.mappixels)
+    this.sparseLog();
+    for (let i = 0; i < 200; i++){
+      this.iteratePixels();
+      this.sparseLog();
+    }
+  };
 
-    this.edges.push({v1: this.verticies[0], v2: this.verticies[1]})
-    this.edges.push({v1: this.verticies[1], v2: this.verticies[3]})
-    this.edges.push({v1: this.verticies[2], v2: this.verticies[3]})
-    this.edges.push({v1: this.verticies[0], v2: this.verticies[2]})
+  iteratePixels = () => {
+    console.log('this.iteratePixels')
+    for (let i = 0; i < this.size; i++) {
+      for (let j = 0; j < this.size; j++) {
+        let pixel = this.mappixels[i][j];
+        const neighbors = []
 
-    // let's generate edges
-    for(let i = 0; i < 10000; i++) {
-      const v1 = p5.round(p5.random(0, this.numOfPoints-1))
-      const v2 = p5.round(p5.random(0, this.numOfPoints-1))
-      console.log(v1, v2);
+        if (i > 0) {
+          neighbors.push(this.mappixels[i - 1][j])
+        }
+        if (i < this.size - 1) {
+          neighbors.push(this.mappixels[i + 1][j])
+        }
+        if (j > 0) {
+          neighbors.push(this.mappixels[i][j - 1])
+        }
+        if (j < this.size - 1) {
+          neighbors.push(this.mappixels[i][j + 1])
+        }
+        if (i > 0 && j > 0) {
+          neighbors.push(this.mappixels[i - 1][j - 1])
+        }
+        if (i > 0 && j < this.size - 1) {
+          neighbors.push(this.mappixels[i - 1][j + 1])
+        }
+        if (i < this.size - 1 && j > 0) {
+          neighbors.push(this.mappixels[i + 1][j - 1])
+        }
+        if (i < this.size - 1 && j < this.size - 1) {
+          neighbors.push(this.mappixels[i + 1][j + 1])
+        }
 
-      const pv1 = this.verticies[v1];
-      const pv2 = this.verticies[v2];
-      console.log(pv1, pv2)
+        // console.log(neighbors);
 
-      let notIntersect = true;
-      for(const edge of this.edges) {
-        if (isLinesIntersect(pv1, pv2, edge.v1, edge.v2)) {
-          notIntersect = false;
-          break;
+        const map = new Map()
+        for (const n of neighbors) {
+          if (map.has(n)) {
+            map.set(n, map.get(n) + 1);
+          } else {
+            map.set(n, 1);
+          }
+        }
+
+        let max = 0, maxnum = 0;
+        map.forEach((value, key) => {
+          if (maxnum < key && value !== 0)
+          {
+            max = value;
+            maxnum = key;
+          }
+        })
+
+        // if (max !== 0) {
+        //   console.log('max !== 0', max, maxnum);
+        // }
+
+        if (pixel === 0) {
+          pixel = max;
+        }
+
+        this.nextpixels[i][j] = pixel;
+      }
+    }
+    console.log('nextpixels')
+    this.sparseLog(this.nextpixels);
+
+    const t = this.mappixels;
+    this.mappixels = this.nextpixels;
+    this.nextpixels = t;
+    
+  }
+
+
+  sparseLog = (pixels) => {
+    if (pixels === undefined) {
+      pixels = this.mappixels;
+    }
+
+    let counter = 0;
+    for (let x = 0; x < this.size; x++) {
+      for (let y = 0; y < this.size; y++) {
+        if (pixels[x][y]) {
+          counter++;
         }
       }
-
-      if (v1 !== v2 && notIntersect && pv1.x !== pv2.x && pv1.y !== pv2.y) {
-        this.edges.push({ v1: pv1, v2: pv2 });
-      }
     }
+    console.log('sparse counter: ', counter);
+  }
 
-    // create graph structure to speed up computations
-    this.createGraph();
-
-    // lets create first polygon
-    this.polygons = [];
-    this.createPolygon(p5);
-    // console.log(this.edges);
-  };
 
   // NOTE: Do not use setState in draw function or in functions that is executed in draw function... 
   // pls use normal variables or class properties for this purposes
   draw = p5 => {
     p5.background(0);
+    p5.loadPixels();
+    for (let x = 0; x < this.size; x++) {
+      for (let y = 0; y < this.size; y++) {
+        const num = this.mappixels[x][y];
 
-    p5.stroke(255, 0, 255)
-    p5.strokeWeight(4);
-    for (const edge of this.edges) {
-      p5.line(edge.v1.x, edge.v1.y, edge.v2.x, edge.v2.y);
-    }
+        const color = this.colors[num];
 
-
-    p5.stroke(0, 255, 0);
-    p5.strokeWeight(2);
-    for (const point of this.verticies) {
-      p5.circle(point.x, point.y, 3);
-    }
-
-    p5.stroke(0, 0, 255);
-    p5.strokeWeight(5);
-    for (const polygon of this.polygons) {
-      const {verticies} = polygon;
-      for (let i = 0; i < verticies.length - 1; i++) {
-        const v1 = this.verticies[verticies[i]];
-        const v2 = this.verticies[verticies[i+1]];
-        p5.line(v1.x, v1.y, v2.x, v2.y);
+        let pix = (x + y * this.size) * 4;
+        p5.pixels[pix] = color[0];
+        p5.pixels[pix + 1] = color[1];
+        p5.pixels[pix + 2] = color[2];
+        // p5.pixels[pix + 3] = 255;
       }
-
-      const v1 = this.verticies[verticies[0]];
-      const v2 = this.verticies[verticies[verticies.length - 1]];
-      p5.line(v1.x, v1.y, v2.x, v2.y);
     }
+    p5.updatePixels();
+    
 
+
+    
+    // p5.strokeWeight(2);
+    // for (const point of this.verticies) {
+    //   p5.stroke(0, point.i*5, 255-point.i*5);
+    //   p5.circle(point.x, point.y, 3);
+    // }
     p5.stroke(255);
   };
 
